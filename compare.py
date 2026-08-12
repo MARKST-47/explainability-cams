@@ -1,0 +1,1 @@
+# Main compare file, runs all methods on n images

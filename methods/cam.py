@@ -75,7 +75,7 @@ class CAM:
             align_corners=False
         ).squeeze()                                        # (224, 224)
 
-        return cam_upsampled.numpy(), class_idx, logits
+        return cam_upsampled.detach().numpy(), class_idx, logits
 
     def __enter__(self):
         return self

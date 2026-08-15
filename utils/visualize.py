@@ -104,3 +104,105 @@ def show_result(img_pil: Image.Image,
 
     plt.show()
     plt.close(fig)
+    
+def _add_topk_bar(ax, top_k_scores: list, highlight_name: str = None):
+    """
+    Horizontal bar chart of top-k softmax scores.
+    Highlights the predicted class bar in tomato red, others in steelblue.
+    Extracted as a helper so both show_result and compare_methods can use it
+    without duplicating the bar-drawing logic.
+    """
+    names  = [s[0][:22] for s in top_k_scores]
+    scores = [s[1]       for s in top_k_scores]
+
+    colors = [
+        'tomato' if n.strip() == (highlight_name or '').strip() else 'steelblue'
+        for n in names
+    ]
+
+    bars = ax.barh(names[::-1], scores[::-1], color=colors[::-1])
+    ax.set_xlabel('Softmax probability', fontsize=9)
+    ax.set_title('Top-5 Predictions', fontsize=10)
+    ax.set_xlim(0, max(scores) * 1.25)
+
+    for bar, score in zip(bars, scores[::-1]):
+        ax.text(
+            score + 0.005,
+            bar.get_y() + bar.get_height() / 2,
+            f'{score:.3f}',
+            va='center', fontsize=8
+        )
+
+
+def compare_methods(img_pil: Image.Image,
+                    heatmaps: dict,
+                    class_name: str,
+                    top_k_scores: list = None,
+                    save_path: str = None):
+    """
+    Side-by-side overlay comparison for multiple CAM methods.
+
+    Layout:
+        [Original] [Method-1 overlay] [Method-2 overlay] ... [Top-k bar]
+
+    Args:
+        img_pil:      Original PIL image.
+        heatmaps:     Ordered dict of {method_display_name: heatmap_array}.
+                      e.g. {'CAM': arr1, 'Grad-CAM': arr2}
+                      Column order follows key insertion order (Python 3.7+).
+        class_name:   Predicted class label (same for all methods).
+        top_k_scores: Optional list of (class_name, score) tuples.
+        save_path:    If set, saves the figure here.
+
+    Example:
+        compare_methods(
+            img_pil,
+            heatmaps     = {'CAM': cam_map, 'Grad-CAM': gcam_map},
+            class_name   = 'golden retriever',
+            top_k_scores = top5,
+            save_path    = 'results/compare_dog.png'
+        )
+    """
+    method_names = list(heatmaps.keys())
+    n_methods    = len(method_names)
+    has_scores   = top_k_scores is not None
+
+    # columns: 1 original + one overlay per method + optional bar chart
+    n_cols = 1 + n_methods + (1 if has_scores else 0)
+    fig, axes = plt.subplots(1, n_cols, figsize=(4 * n_cols, 4))
+
+    # axes is always a list — but if n_cols == 1 matplotlib returns a bare Axes.
+    # Wrapping ensures we can always index with axes[i].
+    if n_cols == 1:
+        axes = [axes]
+
+    fig.suptitle(
+        f'Method Comparison  ·  Predicted: "{class_name}"',
+        fontsize=13, fontweight='bold'
+    )
+
+    # Panel 0: original image 
+    axes[0].imshow(img_pil)
+    axes[0].set_title('Original', fontsize=10)
+    axes[0].axis('off')
+
+    # Panels 1…N: one overlay per method 
+    for col, method_name in enumerate(method_names, start=1):
+        overlay = heatmap_to_overlay(img_pil, heatmaps[method_name])
+        axes[col].imshow(overlay)
+        axes[col].set_title(method_name, fontsize=10, fontweight='bold')
+        axes[col].axis('off')
+
+    # Last panel (optional): top-k bar chart
+    if has_scores:
+        _add_topk_bar(axes[-1], top_k_scores, highlight_name=class_name)
+
+    plt.tight_layout()
+
+    if save_path:
+        Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        print(f"Saved → {save_path}")
+
+    plt.show()
+    plt.close(fig)

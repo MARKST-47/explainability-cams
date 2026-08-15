@@ -50,8 +50,8 @@ ARCH_REGISTRY = {
     },
 }
 
-# Method registry.
-# Add new methods here when implemented — nothing else in this file needs to change.
+
+# Add new methods here when implemented 
 METHOD_REGISTRY = {
     "cam":     CAM,
     "gradcam": GradCAM,

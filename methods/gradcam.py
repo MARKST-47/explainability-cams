@@ -36,11 +36,16 @@ class GradCAM:
         self._register_hooks(target)
 
     def _register_hooks(self, layer: nn.Module):
+        # Inplace ops (e.g. VGG's ReLU) conflict with full_backward_hook's
+        # autograd wrapper — disable them across the whole model.
+        for m in self.model.modules():
+            if hasattr(m, 'inplace'):
+                m.inplace = False
+
         def _save_activation(module, input, output):
             self._activations = output.detach()
 
         def _save_gradient(module, grad_input, grad_output):
-            # grad_output[0]: gradient of the loss w.r.t. this layer's output
             self._gradients = grad_output[0].detach()
 
         self._fwd_handle = layer.register_forward_hook(_save_activation)

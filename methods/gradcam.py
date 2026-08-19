@@ -19,7 +19,7 @@ class GradCAM:
     def __init__(self, model: nn.Module, target_layer: nn.Module = None):
         """
         Args:
-            model:        Pretrained model in eval mode.
+            model: Pretrained model in eval mode.
             target_layer: Conv layer to hook. Defaults to model.layer4[-1]
                           for ResNet. Pass the correct layer for other archs
                           (e.g. model.features[-3] for VGG).
@@ -28,9 +28,9 @@ class GradCAM:
         self.model.eval()
 
         self._activations = None
-        self._gradients   = None
-        self._fwd_handle  = None
-        self._bwd_handle  = None
+        self._gradients = None
+        self._fwd_handle = None
+        self._bwd_handle = None
 
         target = target_layer if target_layer is not None else model.layer4[-1]
         self._register_hooks(target)
@@ -63,14 +63,14 @@ class GradCAM:
                  upsample_size: tuple = (224, 224)):
         """
         Args:
-            img_tensor:    (1, 3, H, W) — must not be inside torch.no_grad().
-            class_idx:     Target class index. None = top-1 predicted.
+            img_tensor: (1, 3, H, W) — must not be inside torch.no_grad().
+            class_idx: Target class index. None = top-1 predicted.
             upsample_size: Output resolution.
 
         Returns:
-            heatmap   (H, W) numpy float32 in [0, 1]
+            heatmap (H, W) numpy float32 in [0, 1]
             class_idx int
-            logits    (1, 1000) detached tensor
+            logits (1, 1000) detached tensor
         """
         self.model.zero_grad()
         logits = self.model(img_tensor)
@@ -81,13 +81,13 @@ class GradCAM:
         self.model.zero_grad()
         logits[0, class_idx].backward()
 
-        grads  = self._gradients[0]    # (C, H, W)
-        acts   = self._activations[0]  # (C, H, W)
+        grads = self._gradients[0]    # (C, H, W)
+        acts = self._activations[0]  # (C, H, W)
 
         alpha  = grads.mean(dim=(1, 2))                         # (C,)
-        cam    = (alpha.view(-1, 1, 1) * acts).sum(dim=0)      # (H, W)
-        cam    = F.relu(cam)
-        cam    = (cam - cam.min()) / (cam.max() + 1e-8)
+        cam = (alpha.view(-1, 1, 1) * acts).sum(dim=0)      # (H, W)
+        cam = F.relu(cam)
+        cam = (cam - cam.min()) / (cam.max() + 1e-8)
 
         cam = F.interpolate(
             cam.unsqueeze(0).unsqueeze(0),

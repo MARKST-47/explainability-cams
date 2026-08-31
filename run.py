@@ -2,7 +2,7 @@
 Visualize CAM-family attribution methods on ImageNet classifiers.
 
 Usage:
-    python run.py [--method cam|gradcam|all] [--arch resnet18|resnet50|vgg16]
+    python run.py [--method cam|gradcam|gradcampp|all] [--arch resnet18|resnet50|vgg16]
                   [--img PATH] [--class_idx N] [--top_k N]
 
 Examples:
@@ -17,21 +17,14 @@ from pathlib import Path
 import torch
 import torch.nn.functional as F
 from torchvision import models
-from torchvision.models import (
-    ResNet18_Weights,
-    ResNet50_Weights,
-    VGG16_Weights,
-)
+from torchvision.models import ResNet18_Weights, ResNet50_Weights, VGG16_Weights
 
-from utils.preprocess import load_image, get_class_names
-from utils.visualize import show_result, compare_methods
 from methods.cam import CAM
 from methods.gradcam import GradCAM
+from methods.gradcampp import GradCAMPlusPlus
+from utils.preprocess import get_class_names, load_image
+from utils.visualize import compare_methods, show_result
 
-
-# Architecture registry.
-# target_layer: callable(model) -> the conv layer to hook for gradient methods.
-# cam_support:  CAM requires GAP -> single FC, which VGG-style archs lack.
 ARCH_REGISTRY = {
     "resnet18": {
         "loader":       lambda: models.resnet18(weights=ResNet18_Weights.IMAGENET1K_V1),
@@ -45,19 +38,18 @@ ARCH_REGISTRY = {
     },
     "vgg16": {
         "loader":       lambda: models.vgg16(weights=VGG16_Weights.IMAGENET1K_V1),
-        "target_layer": lambda m: m.features[-3],  # last Conv2d before ReLU + MaxPool
+        "target_layer": lambda m: m.features[-3],
         "cam_support":  False,
     },
 }
 
-
-# Add new methods here when implemented 
 METHOD_REGISTRY = {
-    "cam":     CAM,
-    "gradcam": GradCAM,
+    "cam":       CAM,
+    "gradcam":   GradCAM,
+    "gradcampp": GradCAMPlusPlus,
 }
 
-ALL_METHODS = ["cam", "gradcam"]
+ALL_METHODS = ["cam", "gradcam", "gradcampp"]
 
 
 def load_model(arch_name: str):
@@ -67,15 +59,12 @@ def load_model(arch_name: str):
     print(f"Loading {arch_name}...")
     model = cfg["loader"]()
     model.eval()
-    target_layer = cfg["target_layer"](model)
-    return model, target_layer, cfg["cam_support"]
+    return model, cfg["target_layer"](model), cfg["cam_support"]
 
 
 def create_engine(method_name: str, model, target_layer):
     if method_name == "cam":
         return CAM(model)
-    # Gradient-based methods receive the target layer so they work
-    # across architectures where the hook location differs.
     return METHOD_REGISTRY[method_name](model, target_layer=target_layer)
 
 
@@ -85,13 +74,13 @@ def get_top_k(logits: torch.Tensor, class_names: list, k: int):
     return [(class_names[i.item()], p.item()) for i, p in zip(top_idx, top_probs)]
 
 
-def process_image(image_path, method_names, model, target_layer, class_names,
-                  forced_class=None, top_k=5):
+def process_image(image_path, method_names, arch_name, model, target_layer,
+                  class_names, forced_class=None, top_k=5):
     print(f"  {Path(image_path).name}")
 
     img_pil, img_tensor = load_image(image_path)
 
-    heatmaps    = {}
+    heatmaps     = {}
     active_class = forced_class
     main_logits  = None
 
@@ -113,7 +102,7 @@ def process_image(image_path, method_names, model, target_layer, class_names,
 
     stem      = Path(image_path).stem
     tag       = "_".join(method_names)
-    save_path = f"results/{tag}_{stem}.png"
+    save_path = f"results/{arch_name}_{tag}_{stem}.png"
 
     if len(method_names) == 1:
         show_result(
@@ -173,7 +162,7 @@ def resolve_images(img_arg: str) -> list:
 def main():
     parser = argparse.ArgumentParser(description="CAM-family visualization")
     parser.add_argument("--method",    default="gradcam",
-                        help="cam | gradcam | all  (default: gradcam)")
+                        help="cam | gradcam | gradcampp | all  (default: gradcam)")
     parser.add_argument("--arch",      default="resnet18",
                         help=f"Architecture: {list(ARCH_REGISTRY)}  (default: resnet18)")
     parser.add_argument("--img",       default=None,
@@ -200,6 +189,7 @@ def main():
         process_image(
             image_path   = path,
             method_names = method_names,
+            arch_name    = args.arch,
             model        = model,
             target_layer = target_layer,
             class_names  = class_names,

@@ -5,9 +5,6 @@ import torch.nn.functional as F
 
 class GradCAMPlusPlus:
     """
-    Grad-CAM++ — Chattopadhay et al., WACV 2018.
-    arXiv: 1710.11063
-
     Extends Grad-CAM with pixel-wise alpha weights from second and third
     order gradient terms, producing tighter localisation when a class
     appears multiple times or occupies a small image region.
@@ -75,7 +72,7 @@ class GradCAMPlusPlus:
         logits[0, class_idx].backward()
 
         grads = self._gradients[0]    # (C, H, W)
-        acts  = self._activations[0]  # (C, H, W)
+        acts = self._activations[0]  # (C, H, W)
 
         grads_sq = grads ** 2         # (C, H, W)
         grads_cu = grads ** 3         # (C, H, W)
@@ -83,7 +80,7 @@ class GradCAMPlusPlus:
         # The spatial sum term is constant for all (i,j) within each channel k,
         # computed as sum_{a,b}( A_{ab}^k * grad³_{ab}^k ) — shape (C, 1, 1).
         spatial_sum = (acts * grads_cu).sum(dim=(1, 2), keepdim=True)
-        denom       = 2.0 * grads_sq + spatial_sum   # (C, H, W) via broadcast
+        denom = 2.0 * grads_sq + spatial_sum   # (C, H, W) via broadcast
 
         # Where denom is non-positive or near-zero set alpha to 0.
         # Prevents sign flips when the third-order term dominates negatively.
